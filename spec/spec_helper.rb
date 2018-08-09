@@ -1,29 +1,36 @@
-ENV["PLAYLISTER_ENV"] = "test"
+ENV["SINATRA_ENV"] = "test"
 
 require_relative '../config/environment'
+require 'rack/test'
+require 'capybara/rspec'
+require 'capybara/dsl'
+
+if ActiveRecord::Migrator.needs_migration?
+  raise 'Migrations are pending. Run `rake db:migrate SINATRA_ENV=test` to resolve the issue.'
+end
+
+ActiveRecord::Base.logger = nil
 
 RSpec.configure do |config|
   config.run_all_when_everything_filtered = true
   config.filter_run :focus
-  config.color = true
-  config.formatter = :documentation
-  config.order = 'default'
+  config.include Rack::Test::Methods
+  config.include Capybara::DSL
+  DatabaseCleaner.strategy = :truncation
 
   config.before do
-    reset_database
+    DatabaseCleaner.clean
   end
+
+  config.after do
+    DatabaseCleaner.clean
+  end
+
+  config.order = 'default'
 end
 
-def reset_database
-  migrate_db
+def app
+  Rack::Builder.parse_file('config.ru').first
 end
 
-def clean_database
-  Artist.delete_all if defined?(Artist) && DB.tables.include?("artists")
-  Song.delete_all if defined?(Song) && DB.tables.include?("songs")
-  Genre.delete_all if defined?(Genre) && DB.tables.include?("genres")
-end
-
-def seed_database
-  LibraryParser.new('spec/fixtures/mp3s').parse_and_insert_songs
-end
+Capybara.app = app
